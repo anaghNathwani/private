@@ -1,10 +1,10 @@
 """
 pdf_reporter.py — Generate a PDF report for the solved Sudoku puzzle.
 
-The report contains three sections:
-  1. Original Puzzle  — the grid as extracted from the input PDF
-  2. Solution         — the fully completed grid (solved cells in blue)
-  3. Solving Steps    — numbered log of every action the solver took
+The report is exactly three pages:
+  Page 1 — Original Puzzle
+  Page 2 — Answer Key (solved grid)
+  Page 3 — Step-by-step explanation
 """
 
 from reportlab.platypus import (
@@ -14,6 +14,8 @@ from reportlab.platypus import (
     Paragraph,
     Spacer,
     HRFlowable,
+    PageBreak,
+    KeepTogether,
 )
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -71,27 +73,20 @@ def _build_story(
     steps: list[Step],
     styles,
 ) -> list:
+    # Shared styles
     title_style = ParagraphStyle(
         "SudokuTitle",
         parent=styles["Title"],
         fontSize=22,
-        spaceAfter=6,
+        spaceAfter=4,
         alignment=TA_CENTER,
-    )
-    h2_style = ParagraphStyle(
-        "SudokuH2",
-        parent=styles["Heading2"],
-        fontSize=14,
-        spaceBefore=18,
-        spaceAfter=8,
-        alignment=TA_LEFT,
     )
     note_style = ParagraphStyle(
         "SudokuNote",
         parent=styles["Normal"],
         fontSize=9,
         textColor=colors.grey,
-        spaceAfter=10,
+        spaceAfter=12,
         alignment=TA_CENTER,
     )
     step_style = ParagraphStyle(
@@ -104,37 +99,49 @@ def _build_story(
     backtrack_style = ParagraphStyle(
         "SudokuBacktrack",
         parent=step_style,
-        textColor=colors.HexColor("#b91c1c"),  # red for backtracks
+        textColor=colors.HexColor("#b91c1c"),
     )
+
+    # Vertical centering: content area height minus grid height divided by 2
+    # Letter page: 792pt; margins: 2 * 72pt = 144pt; content: 648pt
+    # Grid: 9 * 36pt = 324pt; title+note ~50pt → remaining ≈ 274pt → half ≈ 137pt
+    _grid_top_pad = 110
 
     story = []
 
-    # ---- Title ----
-    story.append(Paragraph("Sudoku Solver Report", title_style))
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey))
-    story.append(Spacer(1, 12))
-
-    # ---- Section 1: Original Puzzle ----
-    story.append(Paragraph("1. Original Puzzle", h2_style))
+    # ================================================================
+    # PAGE 1 — Original Puzzle
+    # ================================================================
+    story.append(Spacer(1, _grid_top_pad))
+    story.append(Paragraph("Sudoku Puzzle", title_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey, spaceAfter=10))
     story.append(
-        Paragraph("Given numbers are shown in black. Empty cells are shown as ·", note_style)
+        Paragraph("Given numbers are shown in black · Empty cells are shown as ·", note_style)
     )
-    story.append(_build_grid_table(original_grid, original_grid=None, show_given_as_empty=False))
-    story.append(Spacer(1, 20))
+    story.append(_centered_table(_build_grid_table(original_grid, original_grid=None)))
 
-    # ---- Section 2: Solution ----
-    story.append(Paragraph("2. Solution", h2_style))
+    # ================================================================
+    # PAGE 2 — Answer Key
+    # ================================================================
+    story.append(PageBreak())
+    story.append(Spacer(1, _grid_top_pad))
+    story.append(Paragraph("Answer Key", title_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey, spaceAfter=10))
     story.append(
         Paragraph(
-            "Given numbers in black · Solver-placed numbers in <font color=\"#1a56db\">blue</font>",
+            "Given numbers in black · "
+            "Solver-placed numbers in <font color=\"#1a56db\">blue</font>",
             note_style,
         )
     )
-    story.append(_build_grid_table(solved_grid, original_grid=original_grid))
-    story.append(Spacer(1, 20))
+    story.append(_centered_table(_build_grid_table(solved_grid, original_grid=original_grid)))
 
-    # ---- Section 3: Solving Steps ----
-    story.append(Paragraph("3. Solving Steps", h2_style))
+    # ================================================================
+    # PAGE 3 — Step-by-step Explanation
+    # ================================================================
+    story.append(PageBreak())
+    story.append(Paragraph("Step-by-Step Explanation", title_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey, spaceAfter=6))
 
     naked_count = sum(1 for s in steps if s.reason == "Naked single")
     trial_count = sum(1 for s in steps if s.reason == "Trial (backtracking)")
@@ -148,13 +155,27 @@ def _build_story(
     story.append(Paragraph(summary, note_style))
 
     if not steps:
-        story.append(Paragraph("(Puzzle was already complete.)", step_style))
+        story.append(Paragraph("(Puzzle was already complete — no steps needed.)", step_style))
     else:
         for step in steps:
             is_backtrack = step.reason == "Backtrack"
             story.append(Paragraph(str(step), backtrack_style if is_backtrack else step_style))
 
     return story
+
+
+def _centered_table(table: Table) -> Table:
+    """Wrap a grid table in a single-cell outer table to horizontally center it."""
+    wrapper = Table([[table]])
+    wrapper.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return wrapper
 
 
 # ---------------------------------------------------------------------------
