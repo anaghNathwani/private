@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 solver.py — Solve a 9x9 Sudoku puzzle with constraint propagation + backtracking.
 

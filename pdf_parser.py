@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 pdf_parser.py — Extract a 9x9 Sudoku grid from a PDF file.
 

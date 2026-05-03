@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 pdf_reporter.py — Generate a PDF report for the solved Sudoku puzzle.
 

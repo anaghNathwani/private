@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
 sudoku_solver.py — CLI entry point for the PDF Sudoku Solver.
 
