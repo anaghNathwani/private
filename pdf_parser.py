@@ -225,12 +225,10 @@ def _try_ocr_extraction(pdf_path: str) -> list[list[int]] | None:
 
 
 def _preprocess_cell(image: "Image.Image") -> "Image.Image":
-    """
-    Minimal preprocessing for a single cell image.
-    Slight contrast boost only — heavy binarisation hurts thin strokes.
-    """
-    image = image.convert("RGB")
+    """Greyscale + binarise for reliable single-digit recognition."""
+    image = image.convert("L")
     image = ImageOps.autocontrast(image, cutoff=1)
+    image = image.point(lambda x: 0 if x < 180 else 255, "1").convert("L")
     return image
 
 
