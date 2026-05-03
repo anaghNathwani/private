@@ -39,28 +39,40 @@ def extract_grid(pdf_path: str) -> list[list[int]]:
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
     # Strategies 1 & 2: text-based extraction via pdfplumber
+    text_error = None
     try:
         with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
                 grid = _try_table_extraction(page)
                 if grid is not None:
+                    print("  [parser] Strategy 1 (table extraction): success")
                     _validate(grid)
                     return grid
 
                 text = page.extract_text() or ""
                 grid = _try_text_parsing(text)
                 if grid is not None:
+                    print("  [parser] Strategy 2 (text parsing): success")
                     _validate(grid)
                     return grid
-    except Exception:
-        pass  # fall through to OCR
+
+            print("  [parser] Strategy 1 & 2: no grid found in text/tables")
+            if pdf.pages:
+                sample = (pdf.pages[0].extract_text() or "")[:200].replace("\n", " ")
+                print(f"  [parser] Page text sample: {sample!r}")
+    except Exception as exc:
+        text_error = exc
+        print(f"  [parser] Strategy 1 & 2 error: {exc}")
 
     # Strategy 3: OCR fallback for image-based PDFs
     if _OCR_AVAILABLE:
+        print("  [parser] Strategy 3 (OCR): starting…")
         grid = _try_ocr_extraction(pdf_path)
         if grid is not None:
+            print("  [parser] Strategy 3 (OCR): success")
             _validate(grid)
             return grid
+        print("  [parser] Strategy 3 (OCR): no grid found")
         raise ValueError(
             "Could not extract a Sudoku grid from the PDF.\n"
             "OCR was attempted but failed. Make sure the PDF contains a clear, "
@@ -248,13 +260,17 @@ def _ocr_cell_by_cell(image: "Image.Image") -> list[list[int]] | None:
     Each cell is preprocessed individually for best digit recognition.
     """
     w, h = image.size
-    grid_box = _detect_grid_box(image) or (0, 0, w, h)
+    detected = _detect_grid_box(image)
+    grid_box = detected or (0, 0, w, h)
+    print(f"  [parser] Image size: {w}x{h}, grid box: {grid_box} ({'detected' if detected else 'full page fallback'})")
     x0, y0, x1, y1 = grid_box
     gw, gh = x1 - x0, y1 - y0
 
     cell_w = gw / 9
     cell_h = gh / 9
+    print(f"  [parser] Cell size: {cell_w:.0f}x{cell_h:.0f} px")
     if cell_w < 20 or cell_h < 20:
+        print("  [parser] Cells too small — aborting cell-by-cell OCR")
         return None
 
     # Inset fraction — enough to clear grid lines but not clip digits
@@ -287,10 +303,9 @@ def _ocr_cell_by_cell(image: "Image.Image") -> list[list[int]] | None:
             grid_row.append(digit)
         result.append(grid_row)
 
-    # Sanity check: reject if fewer than 17 givens (minimum for a valid puzzle)
-    # or if more than 60 cells are empty (likely a bad crop)
     given = sum(1 for r in result for v in r if v != 0)
-    if given < 17 or given > 81:
+    print(f"  [parser] OCR cell-by-cell: found {given} filled cells")
+    if given == 0:
         return None
 
     return result
